@@ -65,15 +65,10 @@ bool lightLeft, lightLeftWarn, lightRight, lightRightWarn;
 
 static inline bool isLow(const uint16_t val) {
     return val < LOW;
-    // return val < 200;
 }
 
 static inline bool isMed(const uint16_t val) {
     return MED1 < val && val < MED2;
-    // return 400 < val && val < 650;
-    // return 430 < val && val < 650;
-    // return 500 < val && val < 620;
-    // return 520 < val && val < 560;
 }
 
 static inline bool isHigh(const uint16_t val) {
@@ -87,8 +82,6 @@ static inline bool isWarn(const uint16_t val) {
 //this func will take color functions and push them to the LED strip since pushLED is slow
 void core1Entry() {
     while (1) {
-        // multicore_fifo_pop_blocking();  //block until there is data, signalling we need to push the buffer
-        // pushLED();
         void (*f)() = (void (*)()) multicore_fifo_pop_blocking();
         if (f == pushLED) {
             pushLED();
@@ -151,91 +144,42 @@ void changeMode() {
 }
 
 void resetValues() {
-    // uint64_t resetStart = time_us_64();
-    // uint64_t resetEnd;
     lockout = false;
     onLeft = offLeft = warnLeft = leftTouch = onRight = offRight = warnRight = rightTouch = false;
     timeLeft = timeRight = 0;
     lightLeft = lightLeftWarn = lightRight = lightRightWarn = false;
-    // resetEnd = time_us_64();
-    // printf("resetting vars: %f\n", (double) (resetEnd - resetStart));
-
-    //this should be a little more than BUZZTIME (1000)
-    // resetStart = time_us_64();
     sleep_ms(BUZZTIME);
     buzzOff();
-    // resetEnd = time_us_64();
-    // printf("resetting buzz: %f\n", (double) (resetEnd - resetStart));
-
-    //this should be a little more than LIGHTTIME (1000) + time to write since we block (approx 1000 us)
-    // resetStart = time_us_64();
     multicoreClearLED();
-    // resetEnd = time_us_64();
-    // printf("done resetting %f\n", (double) (resetEnd - resetStart));
 }
 
 void signalHits() {
-    // uint64_t signalStart = time_us_64();
-    // uint64_t end;
     if (lockout) {
         //a touch is long enough to block further inputs
         resetValues();
-        // end = time_us_64();
-        // printf("lockout finished %f\n", (double)(end - signalStart));
     }
-    // uint64_t start = time_us_64();
-    // printf("signal lockout check %f\n", (double) (start - signalStart));
-    // end = time_us_64();
-    // printf("time to print %f\n", (double) (end - start));
 
     //set the proper lights on a hit and buzz
-    // start = time_us_64();
     if (onLeft && !lightLeft) {
-    // if (!lightLeft && onLeft) {
         multicorePut(putLeft, RED);
         buzzOn();
         lightLeft = true;
-        // end = time_us_64();
-        // printf("signal left on %f\n", (double)(end - start));
     }
-    // end = time_us_64();
-    // printf("time to check left on %f\n", (double) (end - start));
-
-    // start = time_us_64();
     if (offLeft && !lightLeft) {
-    // if (!lightLeft && offLeft) {
         multicorePut(putLeft, WHITE);
         buzzOn();
         lightLeft = true;
-        // end = time_us_64();
-        // printf("signal left off %f\n", (double)(end - start));
     }
-    // end = time_us_64();
-    // printf("time to check left off %f\n", (double) (end - start));
-
-    // start = time_us_64();
     if (onRight && !lightRight) {
-    // if (!lightRight && onRight) {
         multicorePut(putRight, GREEN);
         buzzOn();
         lightRight = true;
-        // end = time_us_64();
-        // printf("signal right on %f\n", (double)(end - start));
     }
-    // end = time_us_64();
-    // printf("time to check right on %f\n", (double) (end - start));
-
-    // start = time_us_64();
     if (offRight && !lightRight) {
-    // if (!lightRight && offRight) {
         multicorePut(putRight, WHITE);
         buzzOn();
         lightRight = true;
-        // end = time_us_64();
-        // printf("signal right off %f\n", (double)(end - start));
     }
-    // end = time_us_64();
-    // printf("signal end %f\n", (double)(end - signalStart));
 
     if (warnLeft && !lightLeftWarn) {
         multicorePut(putLeftWarn, YELLOW);
@@ -254,14 +198,6 @@ void signalHits() {
         multicorePut(putRightWarn, OFF);
         lightRightWarn = false;
     }
-
-    //group each led output together because it's slow; buzz is fast
-    //todo: make this multicore because pushLED is inherently slow
-    // if (lightLeft || lightRight) {
-    //     buzzOn();
-    //     pushLED();
-    // }
-    //warn for foil on self contact
 }
 
 void setup() {
@@ -278,22 +214,17 @@ void setup() {
     gpio_set_dir(EMODEPIN, GPIO_OUT);
     gpio_init(SMODEPIN);
     gpio_set_dir(SMODEPIN, GPIO_OUT);
-    setModeLED(FOIL_MODE);
-
-    //init delay for testing
-    // sleep_ms(7000);
+    setModeLED();
 
     multicorePut(putLeft, RED);
     multicorePut(putLeftWarn, YELLOW);
     multicorePut(putRight, GREEN);
     multicorePut(putRightWarn, YELLOW);
 
-    // multicorePushLED();
     buzzOn();
     sleep_ms(BUZZTIME);
     buzzOff();
     multicoreClearLED();
-    printf("setup done\n");
 }
 
 uint64_t prev;
@@ -301,7 +232,7 @@ void foil() {
     //process socket info for foil
     uint64_t debugNow = time_us_64();
     //500 ms delay between each loop, 2s delay from lights
-    printf("foil: %f\n", (double) (debugNow - prev));
+    printf("foil: %f\n", (double) (debugNow - prev));   //approx 100 us per loop
 
     for (uint8_t i = 0; i < NUMSOCKET; i++) {
         printf("%u ", sockets[i]);
@@ -321,13 +252,11 @@ void foil() {
             if (!leftTouch) {   //start of hit
                 timeLeft = time_us_64();
                 leftTouch = true;
-                // printf("left off start\n");
             }
             else {
                 if (timeLeft + DEPRESS_FOIL <= time_us_64()) {
                     //long enough hit
                     offLeft = true;
-                    // printf("left off end\n");
                 }
             }
         }
@@ -336,13 +265,11 @@ void foil() {
             if (!leftTouch) {   //start of hit
                 timeLeft = time_us_64();
                 leftTouch = true;
-                // printf("left on start\n");
             }
             else {
                 if (timeLeft + DEPRESS_FOIL <= time_us_64()) {
                     //long enough hit
                     onLeft = true;
-                    // printf("left on end\n");
                 }
             }
         }
@@ -354,7 +281,6 @@ void foil() {
     }
 
     //left warn (self touch)
-    // if (sockets[LEFTA] > 200 && sockets[LEFTA] < 420) {
     if (isWarn(sockets[LEFTA])) {
         warnLeft = true;
     }
@@ -369,13 +295,11 @@ void foil() {
             if (!rightTouch) {   //start of hit
                 timeRight = time_us_64();
                 rightTouch = true;
-                // printf("right off start\n");
             }
             else {
                 if (timeRight + DEPRESS_FOIL <= time_us_64()) {
                     //long enough hit
                     offRight = true;
-                    // printf("right off end\n");
                 }
             }
         }
@@ -384,13 +308,11 @@ void foil() {
             if (!rightTouch) {   //start of hit
                 timeRight = time_us_64();
                 rightTouch = true;
-                // printf("right on start\n");
             }
             else {
                 if (timeRight + DEPRESS_FOIL <= time_us_64()) {
                     //long enough hit
                     onRight = true;
-                    // printf("right on end\n");
                 }
             }
         }
@@ -402,7 +324,6 @@ void foil() {
     }
 
     //right warn (self touch)
-    // if (sockets[RIGHTA] > LOW && sockets[RIGHTA] < 420) {
     if (isWarn(sockets[RIGHTA])) {
         warnRight = true;
     }
