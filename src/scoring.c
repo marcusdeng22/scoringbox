@@ -18,19 +18,20 @@
 #define RIGHTB      4
 #define RIGHTC      5
 
-#define BUZZTIME    750    //in ms
-#define LIGHTTIME   750    //in ms, will be turned off after BUZZTIME completes
+#define BUZZTIME    1000    //in ms
+#define LIGHTTIME   1000    //in ms, will be turned off after BUZZTIME completes
 
 #define MODEPIN     0
 #define FMODEPIN    6
 #define EMODEPIN    7
 #define SMODEPIN    8
 
-//COLOR DEF in RGB                RED       GREEN       BLUE
+//COLOR DEF in RGB         RED       GREEN       BLUE
 const uint32_t WHITE     = 255 << 8 | 255 << 16 | 255;
 const uint32_t YELLOW    = 255 << 8 | 255 << 16 | 0;
 const uint32_t RED       = 255 << 8 | 0 << 16   | 0;
 const uint32_t GREEN     = 0 << 8   | 255 << 16 | 0;
+const uint32_t OFF       = 0;
 
 //mode
 const uint8_t FOIL_MODE  = 0;
@@ -51,18 +52,19 @@ volatile uint8_t mode = FOIL_MODE;
 //in microseconds
 const uint16_t DEPRESS_FOIL  = 14000;
 // const uint32_t LOCKOUT_FOIL  = 300000;
-const uint32_t LOCKOUT_FOIL = 1 * 1000 * 1000;
+const uint32_t LOCKOUT_FOIL = 2 * 1000 * 1000;
 
 uint64_t timeLeft;
 uint64_t timeRight;
 
 //states
-bool onLeft, offLeft, leftTouch, onRight, offRight, rightTouch;
+bool onLeft, offLeft, warnLeft, leftTouch, onRight, offRight, warnRight, rightTouch;
 bool lockout;
-bool lightLeft, lightLeftWarn, lightRight, lightRightWarn, signalled;
+bool lightLeft, lightLeftWarn, lightRight, lightRightWarn;
 
 static inline bool isLow(const uint16_t val) {
-    return val < LOW;
+    // return val < LOW;
+    return val < 200;
 }
 
 static inline bool isMed(const uint16_t val) {
@@ -77,65 +79,44 @@ static inline bool isHigh(const uint16_t val) {
     return HIGH < val;
 }
 
-void toggleLight(uint pin) {
-    gpio_put(pin, true);
-    sleep_ms(1000);
-    // gpio_put(pin, false);
-}
-
-void replaceLeft(uint32_t color) {
-    printf("replace call %u\n", color);
-    // return 0;
-}
-
 //this func will take color functions and push them to the LED strip since pushLED is slow
 void core1Entry() {
     while (1) {
-        //get function
-        printf("multicore hello\n");
-        multicore_fifo_pop_blocking();  //block until there is data, signalling we need to push the buffer
-        pushLED();
-        // toggleLight(26);
-        // gpio_put(26, false);
-        // void (*fp)(uint32_t) = (void(*)(uint32_t)) multicore_fifo_pop_blocking();
-
-        // void (*fp)() = (void(*)()) multicore_fifo_pop_blocking();
-        // (*fp)();
-
-        // toggleLight(22);
-        // if (fp == pushLED || fp == buzzOn || fp == clearLED || fp == buzzOff) {
-        // if (false) {
-        //     printf("multicore select alert\n");
-        //     // (*fp)();
-        // }
-        // else {
-        //     printf("multicore select func\n");
-        //     uint32_t color = multicore_fifo_pop_blocking();
-        //     // toggleLight(26); 
-        //     // printf("multicore got color %u\n", color);
-        //     // if (fp == putLeft) {
-        //     //     printf("is replace left\n");
-        //     // }
-        //     // else {
-        //     //     printf("unknown fp %p %p\n", fp, *fp);
-        //     //     printf("replace left pointer %p %p\n", replaceLeft, &replaceLeft);
-        //     // }
-        //     (*fp)(color);
-        //     // gpio_put(22, false);
-        //     printf("multicore called func\n");
-        //     pushLED();
-        // }
+        // multicore_fifo_pop_blocking();  //block until there is data, signalling we need to push the buffer
+        // pushLED();
+        void (*f)() = (void (*)()) multicore_fifo_pop_blocking();
+        if (f == pushLED) {
+            pushLED();
+        }
+        else if (f == clearLED) {
+            sleep_ms(LIGHTTIME);
+            clearLED();
+            //notify back to core 0
+            multicore_fifo_push_blocking(0);
+        }
+        else {
+            uint32_t color = multicore_fifo_pop_blocking();
+            (*f)(color);
+            pushLED();
+            sleep_ms(1);
+        }
     }
 }
 
-// static inline void multiPutColorF(void (*f)(uint32_t), uint32_t color) {
-static inline void multiPutColorF() {
-    // printf("multicore push 1\n");
-    // multicore_fifo_push_blocking((uintptr_t) f);
-    // multicore_fifo_push_blocking((uintptr_t) &pushLED);
-    multicore_fifo_push_blocking(0);
-    // printf("multicore push 2\n");
-    // multicore_fifo_push_blocking(color);
+static inline void multicorePut(void (*f)(uint32_t), uint32_t color) {
+    multicore_fifo_push_blocking((uintptr_t) f);
+    multicore_fifo_push_blocking(color);
+}
+
+static inline void multicorePushLED() {
+    multicore_fifo_push_blocking((uintptr_t) &pushLED);
+}
+
+//if want to set a warn light, use OFF color with pushL/RWarn and multicorePushLED()
+static inline void multicoreClearLED() {
+    multicore_fifo_push_blocking((uintptr_t) &clearLED);
+    //wait until the clear is done
+    multicore_fifo_pop_blocking();
 }
 
 void setModeLED() {
@@ -165,66 +146,123 @@ void changeMode() {
 }
 
 void resetValues() {
+    // uint64_t resetStart = time_us_64();
+    // uint64_t resetEnd;
     lockout = false;
-    onLeft = offLeft = leftTouch = onRight = offRight = rightTouch = false;
+    onLeft = offLeft = warnLeft = leftTouch = onRight = offRight = warnRight = rightTouch = false;
     timeLeft = timeRight = 0;
-    lightLeft = lightLeftWarn = lightRight = lightRightWarn = signalled = false;
+    lightLeft = lightLeftWarn = lightRight = lightRightWarn = false;
+    // resetEnd = time_us_64();
+    // printf("resetting vars: %f\n", (double) (resetEnd - resetStart));
+
+    //this should be a little more than BUZZTIME (1000)
+    // resetStart = time_us_64();
     sleep_ms(BUZZTIME);
     buzzOff();
-    sleep_ms(LIGHTTIME);
-    clearLED();
-    printf("done resetting\n");
+    // resetEnd = time_us_64();
+    // printf("resetting buzz: %f\n", (double) (resetEnd - resetStart));
+
+    //this should be a little more than LIGHTTIME (1000) + time to write since we block (approx 1000 us)
+    // resetStart = time_us_64();
+    multicoreClearLED();
+    // resetEnd = time_us_64();
+    // printf("done resetting %f\n", (double) (resetEnd - resetStart));
 }
 
 void signalHits() {
+    // uint64_t signalStart = time_us_64();
+    // uint64_t end;
     if (lockout) {
         //a touch is long enough to block further inputs
-        printf("lockout finished\n");
         resetValues();
+        // end = time_us_64();
+        // printf("lockout finished %f\n", (double)(end - signalStart));
     }
+    // uint64_t start = time_us_64();
+    // printf("signal lockout check %f\n", (double) (start - signalStart));
+    // end = time_us_64();
+    // printf("time to print %f\n", (double) (end - start));
+
     //set the proper lights on a hit and buzz
+    // start = time_us_64();
     if (onLeft && !lightLeft) {
-        putLeft(RED);
-        // buzzOn();
+    // if (!lightLeft && onLeft) {
+        multicorePut(putLeft, RED);
+        buzzOn();
         lightLeft = true;
-        printf("signal left on\n");
+        // end = time_us_64();
+        // printf("signal left on %f\n", (double)(end - start));
     }
+    // end = time_us_64();
+    // printf("time to check left on %f\n", (double) (end - start));
+
+    // start = time_us_64();
     if (offLeft && !lightLeft) {
-        putLeft(WHITE);
-        // buzzOn();
+    // if (!lightLeft && offLeft) {
+        multicorePut(putLeft, WHITE);
+        buzzOn();
         lightLeft = true;
-        printf("signal left off\n");
+        // end = time_us_64();
+        // printf("signal left off %f\n", (double)(end - start));
     }
+    // end = time_us_64();
+    // printf("time to check left off %f\n", (double) (end - start));
+
+    // start = time_us_64();
     if (onRight && !lightRight) {
-        putRight(GREEN);
-        // buzzOn();
+    // if (!lightRight && onRight) {
+        multicorePut(putRight, GREEN);
+        buzzOn();
         lightRight = true;
-        printf("signal right on\n");
+        // end = time_us_64();
+        // printf("signal right on %f\n", (double)(end - start));
     }
+    // end = time_us_64();
+    // printf("time to check right on %f\n", (double) (end - start));
+
+    // start = time_us_64();
     if (offRight && !lightRight) {
-        putRight(WHITE);
-        // buzzOn();
+    // if (!lightRight && offRight) {
+        multicorePut(putRight, WHITE);
+        buzzOn();
         lightRight = true;
-        printf("signal right off\n");
+        // end = time_us_64();
+        // printf("signal right off %f\n", (double)(end - start));
+    }
+    // end = time_us_64();
+    // printf("signal end %f\n", (double)(end - signalStart));
+
+    if (warnLeft && !lightLeftWarn) {
+        multicorePut(putLeftWarn, YELLOW);
+        lightLeftWarn = true;
+    }
+    else if (!warnLeft && lightLeftWarn) {
+        multicorePut(putLeftWarn, OFF);
+        lightLeftWarn = false;
+    }
+
+    if (warnRight && !lightRightWarn) {
+        multicorePut(putRightWarn, YELLOW);
+        lightRightWarn = true;
+    }
+    else if (!warnRight && lightRightWarn) {
+        multicorePut(putRightWarn, OFF);
+        lightRightWarn = false;
     }
 
     //group each led output together because it's slow; buzz is fast
     //todo: make this multicore because pushLED is inherently slow
-    if (lightLeft || lightRight) {
-        buzzOn();
-        pushLED();
-    }
+    // if (lightLeft || lightRight) {
+    //     buzzOn();
+    //     pushLED();
+    // }
     //warn for foil on self contact
 }
 
 void setup() {
     spi = initSPI();
     alertInit();
-    // //temp indicator
-    // gpio_init(22);
-    // gpio_set_dir(22, GPIO_OUT);
-    // gpio_init(26);
-    // gpio_set_dir(26, GPIO_OUT);
+
     multicore_launch_core1(core1Entry);
     //setup interrupt for mode change
     gpio_set_irq_enabled_with_callback(MODEPIN, GPIO_IRQ_EDGE_RISE, true, &changeMode);
@@ -236,32 +274,30 @@ void setup() {
     gpio_init(SMODEPIN);
     gpio_set_dir(SMODEPIN, GPIO_OUT);
     setModeLED(FOIL_MODE);
-    //test alert init
-    sleep_ms(5000);
-    // multiPutColorF(putLeft, RED);
-    // sleep_ms(300);
-    // multiPutColorF(putLeftWarn, YELLOW);
-    // multiPutColorF(putRight, WHITE);
-    // multiPutColorF(putRightWarn, YELLOW);
 
-    putLeft(RED);
-    putLeftWarn(YELLOW);
-    putRight(GREEN);
-    putRightWarn(YELLOW);
-    multiPutColorF();
-    // pushLED();
+    //init delay for testing
+    // sleep_ms(7000);
+
+    multicorePut(putLeft, RED);
+    multicorePut(putLeftWarn, YELLOW);
+    multicorePut(putRight, GREEN);
+    multicorePut(putRightWarn, YELLOW);
+
+    // multicorePushLED();
     buzzOn();
     sleep_ms(BUZZTIME);
     buzzOff();
-    sleep_ms(LIGHTTIME);
-    // clearLED();
+    multicoreClearLED();
     printf("setup done\n");
 }
 
 uint64_t prev;
 void foil() {
     //process socket info for foil
-    printf("foil: %f\n", (double) (time_us_64() - prev));
+    uint64_t debugNow = time_us_64();
+    //500 ms delay between each loop, 2s delay from lights
+    printf("foil: %f\n", (double) (debugNow - prev));
+
     for (uint8_t i = 0; i < NUMSOCKET; i++) {
         printf("%u ", sockets[i]);
     }
@@ -312,6 +348,14 @@ void foil() {
         }
     }
 
+    //left warn (self touch)
+    if (sockets[LEFTA] > 200 && sockets[LEFTA] < 420) {
+        warnLeft = true;
+    }
+    else {
+        warnLeft = false;
+    }
+
     //right fencer (B)
     if (!onRight && !offRight) {  //ignore if right has hit something (already classified)
         if(isHigh(sockets[RIGHTB]) && isLow(sockets[LEFTA])) {
@@ -351,6 +395,14 @@ void foil() {
         }
     }
 
+    //right warn (self touch)
+    if (sockets[RIGHTA] > LOW && sockets[RIGHTA] < 420) {
+        warnRight = true;
+    }
+    else {
+        warnRight = false;
+    }
+
     prev = time_us_64();
 }
 
@@ -381,15 +433,9 @@ void loop() {
 
 int main() {
     stdio_init_all();
-    //temp indicator
-    // gpio_init(22);
-    // gpio_set_dir(22, GPIO_OUT);
-    // gpio_init(26);
-    // gpio_set_dir(26, GPIO_OUT);
-    // multicore_launch_core1(core1Entry);
     setup();
     while (true) {
-        // loop();
+        loop();
     }
     return 0;
 }
