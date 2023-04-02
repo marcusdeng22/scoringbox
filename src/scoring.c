@@ -41,7 +41,8 @@ const uint8_t MODE_LIMIT = 2;
 
 //state values
 const uint16_t LOW  = 110;
-const uint16_t MED  = 350;
+const uint16_t MED1 = 450;
+const uint16_t MED2 = 620;
 const uint16_t HIGH = 900;
 
 //GLOBALS
@@ -63,12 +64,12 @@ bool lockout;
 bool lightLeft, lightLeftWarn, lightRight, lightRightWarn;
 
 static inline bool isLow(const uint16_t val) {
-    // return val < LOW;
-    return val < 200;
+    return val < LOW;
+    // return val < 200;
 }
 
 static inline bool isMed(const uint16_t val) {
-    return 450 < val && val < 620;
+    return MED1 < val && val < MED2;
     // return 400 < val && val < 650;
     // return 430 < val && val < 650;
     // return 500 < val && val < 620;
@@ -77,6 +78,10 @@ static inline bool isMed(const uint16_t val) {
 
 static inline bool isHigh(const uint16_t val) {
     return HIGH < val;
+}
+
+static inline bool isWarn(const uint16_t val) {
+    return LOW < val && val < MED1;
 }
 
 //this func will take color functions and push them to the LED strip since pushLED is slow
@@ -349,7 +354,8 @@ void foil() {
     }
 
     //left warn (self touch)
-    if (sockets[LEFTA] > 200 && sockets[LEFTA] < 420) {
+    // if (sockets[LEFTA] > 200 && sockets[LEFTA] < 420) {
+    if (isWarn(sockets[LEFTA])) {
         warnLeft = true;
     }
     else {
@@ -396,7 +402,8 @@ void foil() {
     }
 
     //right warn (self touch)
-    if (sockets[RIGHTA] > LOW && sockets[RIGHTA] < 420) {
+    // if (sockets[RIGHTA] > LOW && sockets[RIGHTA] < 420) {
+    if (isWarn(sockets[RIGHTA])) {
         warnRight = true;
     }
     else {
