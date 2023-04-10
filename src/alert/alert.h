@@ -5,7 +5,7 @@
 #include "ws2812.pio.h"
 
 #define IS_RGBW false
-#define NUM_PIXELS 36 //60
+#define NUM_PIXELS 60
 
 /*
 there are 6 LEDs per row
@@ -27,9 +27,9 @@ s is start, with wire going left
 */
 
 #define LEFT        0
-#define LEFTWARN    6//24
-#define RIGHTWARN   12//30
-#define RIGHT       18//36
+#define LEFTWARN    24
+#define RIGHTWARN   30
+#define RIGHT       36
 
 #define WS2812_PIN  21
 #define BUZZER      15

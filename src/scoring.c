@@ -41,7 +41,7 @@ const uint8_t MODE_LIMIT = 2;
 
 //state values
 const uint16_t LOW  = 110;
-const uint16_t MED1 = 450;
+const uint16_t MED1 = 400;
 const uint16_t MED2 = 620;
 const uint16_t HIGH = 900;
 
@@ -49,11 +49,15 @@ const uint16_t HIGH = 900;
 spi_inst_t * spi;
 uint16_t sockets[NUMSOCKET];
 volatile uint8_t mode = FOIL_MODE;
+volatile bool modeChange = false;
 
 //in microseconds
-const uint16_t DEPRESS_FOIL  = 14000;
-// const uint32_t LOCKOUT_FOIL  = 300000;
-const uint32_t LOCKOUT_FOIL = 2 * 1000 * 1000;
+const uint32_t DEPRESS_FOIL  = 14000;
+const uint32_t LOCKOUT_FOIL  = 300000;
+const uint32_t DEPRESS_EPEE  = 2000;
+const uint32_t LOCKOUT_EPEE  = 45000;
+const uint32_t DEPRESS_SABRE = 100;
+const uint32_t LOCKOUT_SABRE = 170000;
 
 uint64_t timeLeft;
 uint64_t timeRight;
@@ -96,7 +100,7 @@ void core1Entry() {
             uint32_t color = multicore_fifo_pop_blocking();
             (*f)(color);
             pushLED();
-            sleep_ms(1);
+            sleep_ms(1);    //delay so that the ws2812 protocol can propogate!
         }
     }
 }
@@ -135,14 +139,6 @@ void setModeLED() {
     }
 }
 
-void changeMode() {
-    mode ++;
-    if (mode > MODE_LIMIT) {
-        mode = FOIL_MODE;
-    }
-    setModeLED();
-}
-
 void resetValues() {
     lockout = false;
     onLeft = offLeft = warnLeft = leftTouch = onRight = offRight = warnRight = rightTouch = false;
@@ -151,6 +147,11 @@ void resetValues() {
     sleep_ms(BUZZTIME);
     buzzOff();
     multicoreClearLED();
+}
+
+//just a flag because we only want to trigger once
+void changeMode() {
+    modeChange = true;
 }
 
 void signalHits() {
@@ -206,7 +207,7 @@ void setup() {
 
     multicore_launch_core1(core1Entry);
     //setup interrupt for mode change
-    gpio_set_irq_enabled_with_callback(MODEPIN, GPIO_IRQ_EDGE_RISE, true, &changeMode);
+    gpio_set_irq_enabled_with_callback(MODEPIN, GPIO_IRQ_EDGE_FALL, true, &changeMode);
     //init mode LED pins
     gpio_init(FMODEPIN);
     gpio_set_dir(FMODEPIN, GPIO_OUT);
@@ -227,21 +228,20 @@ void setup() {
     multicoreClearLED();
 }
 
-uint64_t prev;
+// uint64_t prev;
 void foil() {
     //process socket info for foil
     uint64_t debugNow = time_us_64();
     //500 ms delay between each loop, 2s delay from lights
-    printf("foil: %f\n", (double) (debugNow - prev));   //approx 100 us per loop
+    // printf("foil: %f\n", (double) (debugNow - prev));   //approx 100 us per loop
 
-    for (uint8_t i = 0; i < NUMSOCKET; i++) {
-        printf("%u ", sockets[i]);
-    }
-    printf("\n");
+    // for (uint8_t i = 0; i < NUMSOCKET; i++) {
+    //     printf("%u ", sockets[i]);
+    // }
+    // printf("\n");
 
     uint64_t now = time_us_64();
-    if (((onLeft || offLeft) && (timeLeft + LOCKOUT_FOIL < now)) ||
-        ((onRight || offRight) && (timeRight + LOCKOUT_FOIL < now))) {
+    if (((onLeft || offLeft) && (timeLeft + LOCKOUT_FOIL < now)) || ((onRight || offRight) && (timeRight + LOCKOUT_FOIL < now))) {
             lockout = true;
     }
 
@@ -331,20 +331,163 @@ void foil() {
         warnRight = false;
     }
 
-    prev = time_us_64();
+    // prev = time_us_64();
 }
 
 void epee() {
     //process socket info for epee
-    printf("epee\n");
+    uint64_t debugNow = time_us_64();
+    //500 ms delay between each loop, 2s delay from lights
+    // printf("epee: %f\n", (double) (debugNow - prev));   //approx ??? us per loop
+
+    // for (uint8_t i = 0; i < NUMSOCKET; i++) {
+    //     printf("%u ", sockets[i]);
+    // }
+    // printf("\n");
+
+    uint64_t now = time_us_64();
+    if ((onLeft && (timeLeft + LOCKOUT_EPEE < now)) || (onRight && (timeRight + LOCKOUT_EPEE < now))) {
+            lockout = true;
+    }
+
+    //left fencer (A)
+    if (!onLeft) {  //ignore if left has hit something (already classified)
+        if (isMed(sockets[LEFTB]) && isMed(sockets[LEFTA])) {
+            //B weapon pin and A pin completed
+            if (!leftTouch) {   //start of hit
+                timeLeft = time_us_64();
+                leftTouch = true;
+            }
+            else {
+                if (timeLeft + DEPRESS_EPEE <= time_us_64()) {
+                    //long enough hit
+                    onLeft = true;
+                }
+            }
+        }
+        else {
+            //too short of a hit: reset
+            timeLeft = 0;
+            leftTouch = false;
+        }
+    }
+
+    //right fencer (B)
+    if (!onRight) {  //ignore if right has hit something (already classified)
+        if (isMed(sockets[RIGHTB]) && isMed(sockets[RIGHTA])) {
+            //B weapon pin and A pin completed
+            if (!rightTouch) {   //start of hit
+                timeRight = time_us_64();
+                rightTouch = true;
+            }
+            else {
+                if (timeRight + DEPRESS_EPEE <= time_us_64()) {
+                    //long enough hit
+                    onRight = true;
+                }
+            }
+        }
+        else {
+            //too short of a hit: reset
+            timeRight = 0;
+            rightTouch = false;
+        }
+    }
+
+    // prev = time_us_64();
 }
 
 void sabre() {
     //process socket info for sabre
-    printf("sabre\n");
+    uint64_t debugNow = time_us_64();
+    //500 ms delay between each loop, 2s delay from lights
+    // printf("sabre: %f\n", (double) (debugNow - prev));   //approx ??? us per loop
+
+    // for (uint8_t i = 0; i < NUMSOCKET; i++) {
+    //     printf("%u ", sockets[i]);
+    // }
+    // printf("\n");
+
+    uint64_t now = time_us_64();
+    if ((onLeft && (timeLeft + LOCKOUT_SABRE < now)) || (onRight && (timeRight + LOCKOUT_SABRE < now))) {
+            lockout = true;
+    }
+
+    //left fencer (A)
+    if (!onLeft) {  //ignore if left has hit something (already classified)
+        if (isMed(sockets[LEFTB]) && isMed(sockets[RIGHTA])) {
+            //B weapon pin and right A lame pin completed
+            if (!leftTouch) {
+                timeLeft = time_us_64();
+                leftTouch = true;
+            }
+            else {
+                if (timeLeft + DEPRESS_SABRE <= time_us_64()) {
+                    //long enough hit
+                    onLeft = true;
+                }
+            }
+        }
+        else {
+            //too short of a hit; reset
+            timeLeft = 0;
+            leftTouch = false;
+        }
+    }
+
+    //left warn (self touch)
+    if (isMed(sockets[LEFTA])) {
+        warnLeft = true;
+    }
+    else {
+        warnLeft = false;
+    }
+
+    //right fencer (B)
+    if (!onRight) {  //ignore if left has hit something (already classified)
+        if (isMed(sockets[RIGHTB]) && isMed(sockets[LEFTA])) {
+            //B weapon pin and right A lame pin completed
+            if (!rightTouch) {
+                timeRight = time_us_64();
+                rightTouch = true;
+            }
+            else {
+                if (timeRight + DEPRESS_SABRE <= time_us_64()) {
+                    //long enough hit
+                    onRight = true;
+                }
+            }
+        }
+        else {
+            //too short of a hit; reset
+            timeRight = 0;
+            rightTouch = false;
+        }
+    }
+
+    //right warn (self touch)
+    if (isMed(sockets[RIGHTA])) {
+        warnRight = true;
+    }
+    else {
+        warnRight = false;
+    }
+}
+
+void checkMode() {
+    if (modeChange) {
+        mode ++;
+        if (mode > MODE_LIMIT) {
+            mode = FOIL_MODE;
+        }
+        setModeLED();
+        resetValues();
+        modeChange = false;
+    }
 }
 
 void loop() {
+    checkMode();
     readADC(spi, sockets, 0, NUMSOCKET);
     if (mode == FOIL_MODE) {
         foil();
@@ -356,7 +499,7 @@ void loop() {
         sabre();
     }
     signalHits();
-    sleep_ms(500);
+    // sleep_ms(500);
 }
 
 int main() {
