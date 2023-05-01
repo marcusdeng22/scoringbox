@@ -11,12 +11,12 @@
 #define NUMSOCKET   6
 //access to socket info
 //sockets: A B  C
-#define LEFTA       0
-#define LEFTB       1
-#define LEFTC       2
-#define RIGHTA      3
-#define RIGHTB      4
-#define RIGHTC      5
+#define LEFTA       3
+#define LEFTB       4
+#define LEFTC       5
+#define RIGHTA      0
+#define RIGHTB      1
+#define RIGHTC      2
 
 #define BUZZTIME    1000    //in ms
 #define LIGHTTIME   1000    //in ms, will be turned off after BUZZTIME completes
@@ -25,6 +25,8 @@
 #define FMODEPIN    6
 #define EMODEPIN    7
 #define SMODEPIN    8
+
+#define DEBUG false
 
 //COLOR DEF in RGB         RED       GREEN       BLUE
 const uint32_t WHITE     = 255 << 8 | 255 << 16 | 255;
@@ -228,17 +230,21 @@ void setup() {
     multicoreClearLED();
 }
 
-// uint64_t prev;
+#ifdef DEBUG
+uint64_t prev;
+#endif
 void foil() {
     //process socket info for foil
     uint64_t debugNow = time_us_64();
     //500 ms delay between each loop, 2s delay from lights
-    // printf("foil: %f\n", (double) (debugNow - prev));   //approx 100 us per loop
+#ifdef DEBUG
+    printf("foil: %f\n", (double) (debugNow - prev));   //approx 100 us per loop
 
-    // for (uint8_t i = 0; i < NUMSOCKET; i++) {
-    //     printf("%u ", sockets[i]);
-    // }
-    // printf("\n");
+    for (uint8_t i = 0; i < NUMSOCKET; i++) {
+        printf("%u ", sockets[i]);
+    }
+    printf("\n");
+#endif
 
     uint64_t now = time_us_64();
     if (((onLeft || offLeft) && (timeLeft + LOCKOUT_FOIL < now)) || ((onRight || offRight) && (timeRight + LOCKOUT_FOIL < now))) {
@@ -247,7 +253,7 @@ void foil() {
 
     //left fencer (A)
     if (!onLeft && !offLeft) {  //ignore if left has hit something (already classified)
-        if(isHigh(sockets[LEFTB]) && isLow(sockets[RIGHTA])) {
+        if(isHigh(sockets[LEFTB]) && sockets[RIGHTA] < MED1) { //isLow(sockets[RIGHTA])) {
             //off target left
             if (!leftTouch) {   //start of hit
                 timeLeft = time_us_64();
@@ -290,7 +296,7 @@ void foil() {
 
     //right fencer (B)
     if (!onRight && !offRight) {  //ignore if right has hit something (already classified)
-        if(isHigh(sockets[RIGHTB]) && isLow(sockets[LEFTA])) {
+        if(isHigh(sockets[RIGHTB]) && sockets[LEFTA] < MED1) { //isLow(sockets[LEFTA])) {
             //off target right
             if (!rightTouch) {   //start of hit
                 timeRight = time_us_64();
@@ -331,19 +337,23 @@ void foil() {
         warnRight = false;
     }
 
-    // prev = time_us_64();
+#ifdef DEBUG
+    prev = time_us_64();
+#endif
 }
 
 void epee() {
     //process socket info for epee
     uint64_t debugNow = time_us_64();
     //500 ms delay between each loop, 2s delay from lights
-    // printf("epee: %f\n", (double) (debugNow - prev));   //approx ??? us per loop
+#ifdef DEBUG
+    printf("epee: %f\n", (double) (debugNow - prev));   //approx ??? us per loop
 
-    // for (uint8_t i = 0; i < NUMSOCKET; i++) {
-    //     printf("%u ", sockets[i]);
-    // }
-    // printf("\n");
+    for (uint8_t i = 0; i < NUMSOCKET; i++) {
+        printf("%u ", sockets[i]);
+    }
+    printf("\n");
+#endif
 
     uint64_t now = time_us_64();
     if ((onLeft && (timeLeft + LOCKOUT_EPEE < now)) || (onRight && (timeRight + LOCKOUT_EPEE < now))) {
@@ -394,19 +404,23 @@ void epee() {
         }
     }
 
-    // prev = time_us_64();
+#ifdef DEBUG
+    prev = time_us_64();
+#endif
 }
 
 void sabre() {
     //process socket info for sabre
     uint64_t debugNow = time_us_64();
     //500 ms delay between each loop, 2s delay from lights
-    // printf("sabre: %f\n", (double) (debugNow - prev));   //approx ??? us per loop
+#ifdef DEBUG
+    printf("sabre: %f\n", (double) (debugNow - prev));   //approx ??? us per loop
 
-    // for (uint8_t i = 0; i < NUMSOCKET; i++) {
-    //     printf("%u ", sockets[i]);
-    // }
-    // printf("\n");
+    for (uint8_t i = 0; i < NUMSOCKET; i++) {
+        printf("%u ", sockets[i]);
+    }
+    printf("\n");
+#endif
 
     uint64_t now = time_us_64();
     if ((onLeft && (timeLeft + LOCKOUT_SABRE < now)) || (onRight && (timeRight + LOCKOUT_SABRE < now))) {
@@ -472,6 +486,10 @@ void sabre() {
     else {
         warnRight = false;
     }
+
+#ifdef DEBUG
+    prev = time_us_64();
+#endif
 }
 
 void checkMode() {

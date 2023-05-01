@@ -32,7 +32,7 @@ s is start, with wire going left
 #define RIGHT       36
 
 #define WS2812_PIN  21
-#define BUZZER      15
+#define BUZZER      22
 
 static inline void put_pixel(uint32_t pixel_grb) {
     pio_sm_put_blocking(pio0, 0, pixel_grb << 8u);
