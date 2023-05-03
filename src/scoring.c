@@ -47,6 +47,9 @@ const uint16_t MED1 = 400;
 const uint16_t MED2 = 620;
 const uint16_t HIGH = 900;
 
+const uint16_t FOIL_WARN = 280;
+const uint16_t SABR_WARN = 300;
+
 //GLOBALS
 spi_inst_t * spi;
 uint16_t sockets[NUMSOCKET];
@@ -82,7 +85,11 @@ static inline bool isHigh(const uint16_t val) {
 }
 
 static inline bool isWarn(const uint16_t val) {
-    return LOW < val && val < MED1;
+    return FOIL_WARN     < val && val < MED1;
+}
+
+static inline bool isSabrMed(const uint16_t val) {
+    return SABR_WARN < val && val < MED1;
 }
 
 //this func will take color functions and push them to the LED strip since pushLED is slow
@@ -253,7 +260,7 @@ void foil() {
 
     //left fencer (A)
     if (!onLeft && !offLeft) {  //ignore if left has hit something (already classified)
-        if(isHigh(sockets[LEFTB]) && sockets[RIGHTA] < MED1) { //isLow(sockets[RIGHTA])) {
+        if(isHigh(sockets[LEFTB]) && isLow(sockets[RIGHTA])) {
             //off target left
             if (!leftTouch) {   //start of hit
                 timeLeft = time_us_64();
@@ -296,7 +303,7 @@ void foil() {
 
     //right fencer (B)
     if (!onRight && !offRight) {  //ignore if right has hit something (already classified)
-        if(isHigh(sockets[RIGHTB]) && sockets[LEFTA] < MED1) { //isLow(sockets[LEFTA])) {
+        if(isHigh(sockets[RIGHTB]) && isLow(sockets[LEFTA])) {
             //off target right
             if (!rightTouch) {   //start of hit
                 timeRight = time_us_64();
@@ -429,7 +436,7 @@ void sabre() {
 
     //left fencer (A)
     if (!onLeft) {  //ignore if left has hit something (already classified)
-        if (isMed(sockets[LEFTB]) && isMed(sockets[RIGHTA])) {
+        if (isSabrMed(sockets[LEFTB]) && isSabrMed(sockets[RIGHTA])) {
             //B weapon pin and right A lame pin completed
             if (!leftTouch) {
                 timeLeft = time_us_64();
@@ -450,7 +457,7 @@ void sabre() {
     }
 
     //left warn (self touch)
-    if (isMed(sockets[LEFTA])) {
+    if (isSabrMed(sockets[LEFTA])) {
         warnLeft = true;
     }
     else {
@@ -459,7 +466,7 @@ void sabre() {
 
     //right fencer (B)
     if (!onRight) {  //ignore if left has hit something (already classified)
-        if (isMed(sockets[RIGHTB]) && isMed(sockets[LEFTA])) {
+        if (isSabrMed(sockets[RIGHTB]) && isSabrMed(sockets[LEFTA])) {
             //B weapon pin and right A lame pin completed
             if (!rightTouch) {
                 timeRight = time_us_64();
@@ -480,7 +487,7 @@ void sabre() {
     }
 
     //right warn (self touch)
-    if (isMed(sockets[RIGHTA])) {
+    if (isSabrMed(sockets[RIGHTA])) {
         warnRight = true;
     }
     else {

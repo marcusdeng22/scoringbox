@@ -1,0 +1,78 @@
+Main layout of the Pico and ADC
+------------------------------------------------------------------------------------------
+
+5V GND to plug                         5V power in from plug
+     |                                           |
+     |                                      ON/OFF switch
+     |                                           |
+     |                ---------------            |--- buzzer +          NPN transistor
+     |   mode switch -| 1  PICO  40 |- 5V in ----|    buzzer - --------------- C
+     |                | 2        39 |            \--- LED strip +              B -------\
+     \---------- GND -| 3        38 |- GND ---------- LED strip -        GND - E        |
+                      | 4        37 |                                                   |
+                      | 5        36 |- 3V power to mode LED, mode switch, and MPC3008   |
+                      | 6        35 |                                                   |
+                      | 7        34 |                                                   |
+                      | 8        33 |                                                   |
+            FOIL LED -| 9        32 |                                                   |
+            EPEE LED -| 10       31 |                                                   |
+           SABRE LED -| 11       30 |                                                   |
+                      | 12       29 |- LED strip data                                   |
+                      | 13       28 |                                                   |
+                      | 14       27 |- BUZZER transistor base --------------------------/
+                      | 15       26 |
+                      | 16       25 |- SPI out ---------------\
+                      | 17       24 |- SPI clock -----------\ |
+                      | 18       23 |                       | |
+                      | 19       22 |- SPI chip select -----|-|-\
+                      | 20       21 |- SPI in ------------\ | | |
+                      ---------------                     | | | |
+                                                          | | | |
+                          MCP3008                         | | | |
+                      ---------------                     | | | |
+              RIGHTA -| ch0     Vdd |- 3V                 | | | |
+              RIGHTB -| ch1    Vref |- 3V                 | | | |
+              RIGHTC -| ch2     GND |- GND                | | | |
+               LEFTA -| ch3     CLK |- pin 24 (GPIO 18) --|-/ | |
+               LEFTB -| ch4    Dout |- pin 21 (GPIO 16) --/   | |
+               LEFTC -| ch5     Din |- pin 25 (GPIO 19) ------/ |
+                 GND -| ch6      CS |- pin 22 (GPIO 17) --------/
+                 GND -| ch7     GND |- GND
+                      ---------------
+
+------------------------------------------------------------------------------------------
+
+Layout of pin connectors
+
+LEFTA   LEFTB      LEFTC       RIGHTA  RIGHTB     RIGHTC
+  |       |          |            |       |          |
+  |       |          |            |       |          |
+  |       |          |            |       |          |
+  |--\    |--\       |--\         |--\    |--\       |--\
+  |  |    |  |       |  |         |  |    |  |       |  |
+ ch3 |   ch4 |      ch5 |        ch0 |   ch1 |      ch2 |
+     |       |          |            |       |          |
+    1K R   1K R        1K R         1K R   1K R        1K R
+     |       |          |            |       |          |
+    GND     3V          GND         GND     3V          GND
+
+------------------------------------------------------------------------------------------
+
+Layout of 8 segment
+
+        3V --- 220 R -------\                       -------------------
+        3V --- 220 R ---\   |                       |                 |
+        3V --- 220 R -\ |   |                       |   <----1---->   |
+                      | |   |                       |   ^         ^   |
+                    -------------                   |   |         |   |
+                    | 1 2 G 3 4 |                   |   2         4   |
+                    |           |                   |   |         |   |
+                    |           |                   |   v         v   |
+                    | 5 6 G 7 8 |                   |   <----3---->   |
+                    -------------                   |   ^         ^   |
+                      | | | |                       |   |         |   |
+SABRE LED -- 220 R ---/ | | |                       |   7         5   |
+ EPEE LED -- 220 R -----/ | |                       |   |         |   |
+                        GND |                       |   v         V   |
+ FOIL LED -- 220 R ---------/                       |   <----6----> 8 |
+                                                    -------------------
