@@ -73,7 +73,7 @@ bool lockout;
 bool lightLeft, lightLeftWarn, lightRight, lightRightWarn;
 
 static inline bool isLow(const uint16_t val) {
-    return val < LOW;
+    return val <= LOW;
 }
 
 static inline bool isMed(const uint16_t val) {
@@ -84,12 +84,12 @@ static inline bool isHigh(const uint16_t val) {
     return HIGH < val;
 }
 
-static inline bool isWarn(const uint16_t val) {
-    return FOIL_WARN     < val && val < MED1;
+static inline bool isFoilWarn(const uint16_t val) {
+    return FOIL_WARN < val && val <= MED1;
 }
 
 static inline bool isSabrMed(const uint16_t val) {
-    return SABR_WARN < val && val < MED1;
+    return SABR_WARN < val && val < MED2;
 }
 
 //this func will take color functions and push them to the LED strip since pushLED is slow
@@ -260,7 +260,7 @@ void foil() {
 
     //left fencer (A)
     if (!onLeft && !offLeft) {  //ignore if left has hit something (already classified)
-        if(isHigh(sockets[LEFTB]) && isLow(sockets[RIGHTA])) {
+        if(isHigh(sockets[LEFTB]) && (isLow(sockets[RIGHTA]) || isFoilWarn(sockets[RIGHTA]))) {
             //off target left
             if (!leftTouch) {   //start of hit
                 timeLeft = time_us_64();
@@ -273,7 +273,7 @@ void foil() {
                 }
             }
         }
-        else if (isMed(sockets[LEFTB]) && isMed(sockets[RIGHTA])) {
+        else if ((isFoilWarn(sockets[LEFTB]) || isMed(sockets[LEFTB])) && (isFoilWarn(sockets[RIGHTA]) || isMed(sockets[RIGHTA]))) {
             //on left
             if (!leftTouch) {   //start of hit
                 timeLeft = time_us_64();
@@ -294,7 +294,7 @@ void foil() {
     }
 
     //left warn (self touch)
-    if (isWarn(sockets[LEFTA])) {
+    if (isFoilWarn(sockets[LEFTA])) {
         warnLeft = true;
     }
     else {
@@ -303,7 +303,7 @@ void foil() {
 
     //right fencer (B)
     if (!onRight && !offRight) {  //ignore if right has hit something (already classified)
-        if(isHigh(sockets[RIGHTB]) && isLow(sockets[LEFTA])) {
+        if(isHigh(sockets[RIGHTB]) && (isLow(sockets[LEFTA])) || isFoilWarn(sockets[LEFTA])) {
             //off target right
             if (!rightTouch) {   //start of hit
                 timeRight = time_us_64();
@@ -316,7 +316,7 @@ void foil() {
                 }
             }
         }
-        else if (isMed(sockets[RIGHTB]) && isMed(sockets[LEFTA])) {
+        else if (isFoilWarn(sockets[RIGHTB]) || (isMed(sockets[RIGHTB])) && (isFoilWarn(sockets[LEFTA]) || isMed(sockets[LEFTA]))) {
             //on right
             if (!rightTouch) {   //start of hit
                 timeRight = time_us_64();
@@ -337,7 +337,7 @@ void foil() {
     }
 
     //right warn (self touch)
-    if (isWarn(sockets[RIGHTA])) {
+    if (isFoilWarn(sockets[RIGHTA])) {
         warnRight = true;
     }
     else {
