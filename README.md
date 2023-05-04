@@ -3,6 +3,8 @@
 ### Intro
 This is a DIY fencing scoring box compliant with FIE timings. I have included the circuit diagram and source code. The "box" to hold the circuits is just a wooden toolbox with some holes cut into it with some wooden boards attached to it. The LED strip is attached to the top board. However, I do not know much about circuit design, so if you have any questions, reach out to me in the contact section!
 
+Sabre is disabled in code because if both fencer A and B self touch, the ADC readings are the equivalent as A and B touch each other. I didn't have time to fix this in the circuit, but possible fixes are to use a different voltage for A and B, or to use a frequency signal to identify when a circuit completes on each side. The easiest is probably to use a different voltage, but you'll need a logic level converter (probably?) to read the digital output. Again, I don't know much about circuits.
+
 ### Repo description
 Main source code is under /src. Circuit design is under /circuit. The other folders are just remnants of test code.
 

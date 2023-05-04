@@ -39,7 +39,7 @@ const uint32_t OFF       = 0;
 const uint8_t FOIL_MODE  = 0;
 const uint8_t EPEE_MODE  = 1;
 const uint8_t SABRE_MODE = 2;
-const uint8_t MODE_LIMIT = 2;
+const uint8_t MODE_LIMIT = 1;
 
 //state values
 const uint16_t LOW  = 110;
@@ -48,6 +48,8 @@ const uint16_t MED2 = 620;
 const uint16_t HIGH = 900;
 
 const uint16_t FOIL_WARN = 280;
+const uint16_t FOIL_MED = 420;
+const uint16_t SABR_LOW = 200;
 const uint16_t SABR_WARN = 300;
 
 //GLOBALS
@@ -88,8 +90,13 @@ static inline bool isFoilWarn(const uint16_t val) {
     return FOIL_WARN < val && val <= MED1;
 }
 
+static inline bool isFoilMed(const uint16_t val) {
+    return FOIL_MED < val && val < MED2;
+}
+
 static inline bool isSabrMed(const uint16_t val) {
-    return SABR_WARN < val && val < MED2;
+    // return SABR_WARN < val && val < MED2;
+    return SABR_LOW < val && val < SABR_WARN;
 }
 
 //this func will take color functions and push them to the LED strip since pushLED is slow
@@ -260,7 +267,7 @@ void foil() {
 
     //left fencer (A)
     if (!onLeft && !offLeft) {  //ignore if left has hit something (already classified)
-        if(isHigh(sockets[LEFTB]) && (isLow(sockets[RIGHTA]) || isFoilWarn(sockets[RIGHTA]))) {
+        if(isHigh(sockets[LEFTB]) && sockets[RIGHTA] < MED1) { //(isLow(sockets[RIGHTA]) && isFoilWarn(sockets[RIGHTA]))
             //off target left
             if (!leftTouch) {   //start of hit
                 timeLeft = time_us_64();
@@ -273,7 +280,7 @@ void foil() {
                 }
             }
         }
-        else if ((isFoilWarn(sockets[LEFTB]) || isMed(sockets[LEFTB])) && (isFoilWarn(sockets[RIGHTA]) || isMed(sockets[RIGHTA]))) {
+        else if (isFoilMed(sockets[LEFTB]) && isFoilMed(sockets[RIGHTA])) {
             //on left
             if (!leftTouch) {   //start of hit
                 timeLeft = time_us_64();
@@ -303,7 +310,7 @@ void foil() {
 
     //right fencer (B)
     if (!onRight && !offRight) {  //ignore if right has hit something (already classified)
-        if(isHigh(sockets[RIGHTB]) && (isLow(sockets[LEFTA])) || isFoilWarn(sockets[LEFTA])) {
+        if(isHigh(sockets[RIGHTB]) && sockets[LEFTA] < MED1) { //(isLow(sockets[LEFTA])) || isFoilWarn(sockets[LEFTA]))
             //off target right
             if (!rightTouch) {   //start of hit
                 timeRight = time_us_64();
@@ -316,7 +323,7 @@ void foil() {
                 }
             }
         }
-        else if (isFoilWarn(sockets[RIGHTB]) || (isMed(sockets[RIGHTB])) && (isFoilWarn(sockets[LEFTA]) || isMed(sockets[LEFTA]))) {
+        else if (isFoilMed(sockets[RIGHTB]) && isFoilMed(sockets[LEFTA])) {
             //on right
             if (!rightTouch) {   //start of hit
                 timeRight = time_us_64();
@@ -416,6 +423,7 @@ void epee() {
 #endif
 }
 
+//this is disabled in code with MODE_LIMIT
 void sabre() {
     //process socket info for sabre
     uint64_t debugNow = time_us_64();
